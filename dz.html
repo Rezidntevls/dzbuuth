@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DZ-BOOTH - Photobooth</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap');
+
+    body {
+      font-family: 'Roboto Condensed', sans-serif;
+      background-color: #000;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    .btn-gold {
+      background-color: #FFD700;
+      color: #000;
+      font-weight: bold;
+      padding: 0.5rem 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .btn-gold:hover {
+      background-color: #e6c200;
+    }
+
+    .filter-button {
+      background-color: #333;
+      color: #FFD700;
+      border: 2px solid transparent;
+      padding: 0.5rem 1rem;
+      margin: 0.25rem;
+      cursor: pointer;
+    }
+
+    .filter-button.active,
+    .filter-button:hover {
+      border: 2px solid #FFD700;
+    }
+
+    .photo-strip-preview {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 20px;
+      padding: 10px;
+      background-color: black;
+      border: 4px solid #FFD700;
+    }
+
+    .photo-strip-preview img {
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+    }
+
+    .sticker-draggable {
+      width: 60px;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      cursor: move;
+      z-index: 1000;
+    }
+
+    .countdown {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 6rem;
+      color: yellow;
+      display: none;
+      font-weight: bold;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <header class="bg-black border-b-4 border-yellow-400 py-4 px-6">
+    <div class="max-w-5xl mx-auto flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-yellow-400">DZ-BOOTH</h1>
+      <nav class="space-x-4">
+        <button onclick="showPage('home')" class="btn-gold">Home</button>
+        <button onclick="showPage('photobooth')" class="btn-gold">Photobooth</button>
+        <button onclick="showPage('gallery')" class="btn-gold">Gallery</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 relative">
+    <div id="countdown" class="countdown">5</div>
+
+    <!-- Home Page -->
+    <section id="home-page">
+      <div class="text-center">
+        <h2 class="text-4xl font-bold mb-4 text-yellow-400">WELCOME TO DZ-BOOTH</h2>
+        <p class="text-lg mb-6">Capture stylish photos with vintage, comic, and classic black & white filters. Create a stunning 4-photo strip!</p>
+        <button onclick="showPage('photobooth')" class="btn-gold">Start Photobooth</button>
+      </div>
+    </section>
+
+    <!-- Photobooth Page -->
+    <section id="photobooth-page" class="hidden">
+      <div class="text-center relative">
+        <video id="video" autoplay playsinline class="mx-auto w-full max-w-lg rounded shadow"></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div class="mt-4">
+          <button id="capture-btn" class="btn-gold">Capture Photo (5s Timer)</button>
+        </div>
+        <div class="mt-2">
+          <button id="save-btn" class="btn-gold hidden">Save Last Photo</button>
+        </div>
+
+        <div class="mt-8">
+          <h2 class="text-xl text-yellow-400 font-bold mb-4">Apply Filter</h2>
+          <div class="flex justify-center flex-wrap">
+            <button class="filter-button" onclick="applyFilter('none', event)">None</button>
+            <button class="filter-button" onclick="applyFilter('grayscale(100%)', event)">B&W</button>
+            <button class="filter-button" onclick="applyFilter('sepia(0.6) contrast(1.1)', event)">Vintage</button>
+            <button class="filter-button" onclick="applyFilter('contrast(2) saturate(1.5)', event)">Comic</button>
+          </div>
+        </div>
+
+        <div class="photo-strip-preview mt-6" id="photo-strip"></div>
+        <div class="mt-6">
+          <h2 class="text-xl text-yellow-400 font-bold mb-2">Add Sticker</h2>
+          <button class="btn-gold" onclick="addSticker('eat.svg')"><eat class="svg"></eat></button>
+          <button class="btn-gold" onclick="addSticker('love.svg')"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gallery Page -->
+    <section id="gallery-page" class="hidden text-center">
+      <h2 class="text-3xl font-bold mb-4 text-yellow-400">Gallery</h2>
+      <p class="text-gray-400">(Coming soon...)</p>
+    </section>
+  </main>
+
+  <script>
+    const pages = ['home', 'photobooth', 'gallery'];
+    function showPage(pageId) {
+      pages.forEach(id => {
+        document.getElementById(`${id}-page`).classList.add('hidden');
+      });
+      document.getElementById(`${pageId}-page`).classList.remove('hidden');
+
+      if (pageId === 'photobooth') initCamera();
+    }
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const strip = document.getElementById('photo-strip');
+    const countdownEl = document.getElementById('countdown');
+    let currentFilter = 'none';
+    let lastCapturedDataUrl = '';
+
+    function initCamera() {
+      if (!video.srcObject) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }).then(stream => {
+          video.srcObject = stream;
+        });
+      }
+      video.style.transform = 'scaleX(1)';
+    }
+
+    function applyFilter(filter, e) {
+      currentFilter = filter;
+      video.style.filter = filter;
+      document.querySelectorAll('.filter-button').forEach(btn => btn.classList.remove('active'));
+      if (e) e.target.classList.add('active');
+    }
+
+    captureBtn.addEventListener('click', () => {
+      let count = 5;
+      countdownEl.style.display = 'block';
+      countdownEl.textContent = count;
+      const interval = setInterval(() => {
+        count--;
+        countdownEl.textContent = count;
+        if (count === 0) {
+          clearInterval(interval);
+          countdownEl.style.display = 'none';
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.filter = currentFilter;
+          ctx.drawImage(video, 0, 0);
+          const dataURL = canvas.toDataURL('image/png');
+          lastCapturedDataUrl = dataURL;
+
+          const img = document.createElement('img');
+          img.src = dataURL;
+          strip.appendChild(img);
+
+          if (strip.children.length > 4) {
+            strip.removeChild(strip.firstChild);
+          }
+
+          saveBtn.classList.remove('hidden');
+        }
+      }, 1000);
+    });
+
+    saveBtn.addEventListener('click', () => {
+      if (lastCapturedDataUrl) {
+        const a = document.createElement('a');
+        a.href = lastCapturedDataUrl;
+        a.download = 'dzbooth-photo.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    });
+
+    function addSticker(url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'sticker-draggable';
+      img.style.top = '20px';
+      img.style.left = '20px';
+      document.body.appendChild(img);
+    }
+
+    showPage('home');
+  </script>
+</body>
+</html>
